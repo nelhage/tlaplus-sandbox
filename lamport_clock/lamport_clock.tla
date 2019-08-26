@@ -1,41 +1,60 @@
 ---- MODULE lamport_clock ----
 EXTENDS Integers, TLC
 
+Max(x, y) == IF x < y THEN y ELSE x
+
 (* --algorithm manage_clock
 variables nproc = 2,
   Processes = 1..nproc,
   Steps = 4,
   Tick = 0,
-  Counters = [proc \in 1..nproc |-> 0];
+  Counters = [proc \in Processes |-> 0],
+  msgtime;
 
 begin
-  A: with proc \in Processes do
-    print proc;
-  end with;
+  while Tick < Steps do
+    with send \in Processes, recv \in Processes do
+      \* print [tick |-> Tick, from |-> send, to |-> rcv];
+      msgtime := Counters[send] + 1;
+      Counters[send] := msgtime ||
+      Counters[recv] := Max(msgtime, Counters[recv]) + 1;
+    end with;
+
+    Tick := Tick + 1;
+  end while;
 end algorithm; *)
 \* BEGIN TRANSLATION
-VARIABLES nproc, Processes, Steps, Tick, Counters, pc
+CONSTANT defaultInitValue
+VARIABLES nproc, Processes, Steps, Tick, Counters, msgtime, pc
 
-vars == << nproc, Processes, Steps, Tick, Counters, pc >>
+vars == << nproc, Processes, Steps, Tick, Counters, msgtime, pc >>
 
 Init == (* Global variables *)
         /\ nproc = 2
         /\ Processes = 1..nproc
         /\ Steps = 4
         /\ Tick = 0
-        /\ Counters = [proc \in 1..nproc |-> 0]
-        /\ pc = "A"
+        /\ Counters = [proc \in Processes |-> 0]
+        /\ msgtime = defaultInitValue
+        /\ pc = "Lbl_1"
 
-A == /\ pc = "A"
-     /\ \E proc \in Processes:
-          PrintT(proc)
-     /\ pc' = "Done"
-     /\ UNCHANGED << nproc, Processes, Steps, Tick, Counters >>
+Lbl_1 == /\ pc = "Lbl_1"
+         /\ IF Tick < Steps
+               THEN /\ \E send \in Processes:
+                         \E recv \in Processes:
+                           /\ msgtime' = Counters[send] + 1
+                           /\ Counters' = [Counters EXCEPT ![send] = msgtime',
+                                                           ![recv] = Max(msgtime', Counters[recv]) + 1]
+                    /\ Tick' = Tick + 1
+                    /\ pc' = "Lbl_1"
+               ELSE /\ pc' = "Done"
+                    /\ UNCHANGED << Tick, Counters, msgtime >>
+         /\ UNCHANGED << nproc, Processes, Steps >>
 
 (* Allow infinite stuttering to prevent deadlock on termination. *)
 Terminating == pc = "Done" /\ UNCHANGED vars
 
-Next == A
+Next == Lbl_1
            \/ Terminating
 
 Spec == Init /\ [][Next]_vars
