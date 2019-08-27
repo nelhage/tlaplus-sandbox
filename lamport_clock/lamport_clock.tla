@@ -1,23 +1,45 @@
 ---- MODULE lamport_clock ----
 EXTENDS Integers, TLC
+CONSTANT Nproc, Steps
+
+ASSUME Nproc \in Nat
+ASSUME Steps \in Nat
 
 Max(x, y) == IF x < y THEN y ELSE x
 
 (* --algorithm manage_clock
-variables nproc = 2,
-  Processes = 1..nproc,
-  Steps = 4,
+variables
+  Processes = 1..Nproc,
   Tick = 0,
-  Counters = [proc \in Processes |-> 0],
+  Counters = [p \in Processes |-> 0],
+  Trace = {},
   msgtime;
+
+define
+  RECURSIVE HappensBefore (_, _)
+  HappensBefore (e1, e2) ==
+   /\ e1.tick < e2.tick
+   /\ e1.recv = e2.send
+      \/ \E e \in Trace :
+        /\ e1.tick < e.tick
+        /\ e.tick < e2.tick
+        /\ HappensBefore(e1, e)
+        /\ HappensBefore(e, e2)
+
+  Causal == \A e1 \in Trace : \A e2 \in Trace :
+    HappensBefore(e1, e2) => e1.counter < e2.counter
+end define;
 
 begin
   while Tick < Steps do
-    with send \in Processes, recv \in Processes do
+    with send \in Processes, recv \in Processes \ {send} do
       \* print [tick |-> Tick, from |-> send, to |-> rcv];
       msgtime := Counters[send] + 1;
       Counters[send] := msgtime ||
       Counters[recv] := Max(msgtime, Counters[recv]) + 1;
+      Trace := Trace \union {
+        [send |-> send, recv |-> recv, tick |-> Tick, counter |-> msgtime]
+      }
     end with;
 
     Tick := Tick + 1;
@@ -25,31 +47,48 @@ begin
 end algorithm; *)
 \* BEGIN TRANSLATION
 CONSTANT defaultInitValue
-VARIABLES nproc, Processes, Steps, Tick, Counters, msgtime, pc
+VARIABLES Processes, Tick, Counters, Trace, msgtime, pc
 
-vars == << nproc, Processes, Steps, Tick, Counters, msgtime, pc >>
+(* define statement *)
+RECURSIVE HappensBefore (_, _)
+HappensBefore (e1, e2) ==
+ /\ e1.tick < e2.tick
+ /\ e1.recv = e2.send
+    \/ \E e \in Trace :
+      /\ e1.tick < e.tick
+      /\ e.tick < e2.tick
+      /\ HappensBefore(e1, e)
+      /\ HappensBefore(e, e2)
+
+Causal == \A e1 \in Trace : \A e2 \in Trace :
+  HappensBefore(e1, e2) => e1.counter < e2.counter
+
+
+vars == << Processes, Tick, Counters, Trace, msgtime, pc >>
 
 Init == (* Global variables *)
-        /\ nproc = 2
-        /\ Processes = 1..nproc
-        /\ Steps = 4
+        /\ Processes = 1..Nproc
         /\ Tick = 0
-        /\ Counters = [proc \in Processes |-> 0]
+        /\ Counters = [p \in Processes |-> 0]
+        /\ Trace = {}
         /\ msgtime = defaultInitValue
         /\ pc = "Lbl_1"
 
 Lbl_1 == /\ pc = "Lbl_1"
          /\ IF Tick < Steps
                THEN /\ \E send \in Processes:
-                         \E recv \in Processes:
+                         \E recv \in Processes \ {send}:
                            /\ msgtime' = Counters[send] + 1
                            /\ Counters' = [Counters EXCEPT ![send] = msgtime',
                                                            ![recv] = Max(msgtime', Counters[recv]) + 1]
+                           /\ Trace' = (         Trace \union {
+                                          [send |-> send, recv |-> recv, tick |-> Tick, counter |-> msgtime']
+                                        })
                     /\ Tick' = Tick + 1
                     /\ pc' = "Lbl_1"
                ELSE /\ pc' = "Done"
-                    /\ UNCHANGED << Tick, Counters, msgtime >>
-         /\ UNCHANGED << nproc, Processes, Steps >>
+                    /\ UNCHANGED << Tick, Counters, Trace, msgtime >>
+         /\ UNCHANGED Processes
 
 (* Allow infinite stuttering to prevent deadlock on termination. *)
 Terminating == pc = "Done" /\ UNCHANGED vars
