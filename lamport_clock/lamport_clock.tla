@@ -1,21 +1,24 @@
 ---- MODULE lamport_clock ----
-EXTENDS Integers, TLC
-CONSTANT Nproc, Steps
+EXTENDS Integers, TLC, FiniteSets
+CONSTANT Nproc, Steps, Processes
 
-ASSUME Nproc \in Nat
-ASSUME Steps \in Nat
+ASSUME Nproc = Cardinality(Processes)
+ASSUME Nproc \in Nat \ {0}
+ASSUME Steps \in Nat \ {0}
+
 
 Max(x, y) == IF x < y THEN y ELSE x
 
 (* --algorithm manage_clock
 variables
-  Processes = 1..Nproc,
   Tick = 0,
   Counters = [p \in Processes |-> 0],
   Trace = {},
   msgtime;
 
 define
+  Perms == Permutations(Processes)
+
   RECURSIVE HappensBefore (_, _)
   HappensBefore (e1, e2) ==
    /\ e1.tick < e2.tick
@@ -47,9 +50,11 @@ begin
 end algorithm; *)
 \* BEGIN TRANSLATION
 CONSTANT defaultInitValue
-VARIABLES Processes, Tick, Counters, Trace, msgtime, pc
+VARIABLES Tick, Counters, Trace, msgtime, pc
 
 (* define statement *)
+Perms == Permutations(Processes)
+
 RECURSIVE HappensBefore (_, _)
 HappensBefore (e1, e2) ==
  /\ e1.tick < e2.tick
@@ -64,10 +69,9 @@ Causal == \A e1 \in Trace : \A e2 \in Trace :
   HappensBefore(e1, e2) => e1.counter < e2.counter
 
 
-vars == << Processes, Tick, Counters, Trace, msgtime, pc >>
+vars == << Tick, Counters, Trace, msgtime, pc >>
 
 Init == (* Global variables *)
-        /\ Processes = 1..Nproc
         /\ Tick = 0
         /\ Counters = [p \in Processes |-> 0]
         /\ Trace = {}
@@ -88,7 +92,6 @@ Lbl_1 == /\ pc = "Lbl_1"
                     /\ pc' = "Lbl_1"
                ELSE /\ pc' = "Done"
                     /\ UNCHANGED << Tick, Counters, Trace, msgtime >>
-         /\ UNCHANGED Processes
 
 (* Allow infinite stuttering to prevent deadlock on termination. *)
 Terminating == pc = "Done" /\ UNCHANGED vars
