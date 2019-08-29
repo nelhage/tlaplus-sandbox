@@ -1,9 +1,7 @@
 ---- MODULE lamport_clock ----
 EXTENDS Integers, TLC, FiniteSets
-CONSTANT Nproc, Steps, Processes
+CONSTANT Steps, Processes
 
-ASSUME Nproc = Cardinality(Processes)
-ASSUME Nproc \in Nat \ {0}
 ASSUME Steps \in Nat \ {0}
 
 
