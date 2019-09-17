@@ -35,7 +35,7 @@ begin
   while Tick < Steps do
     with send \in Processes, recv \in Processes \ {send} do
       \* print [tick |-> Tick, from |-> send, to |-> rcv];
-      msgtime := Counters[send] + 1;
+      msgtime := Counters[send];
       Counters[send] := msgtime ||
       Counters[recv] := Max(msgtime, Counters[recv]) + 1;
       Trace := Trace \union {
@@ -80,7 +80,7 @@ Lbl_1 == /\ pc = "Lbl_1"
          /\ IF Tick < Steps
                THEN /\ \E send \in Processes:
                          \E recv \in Processes \ {send}:
-                           /\ msgtime' = Counters[send] + 1
+                           /\ msgtime' = Counters[send]
                            /\ Counters' = [Counters EXCEPT ![send] = msgtime',
                                                            ![recv] = Max(msgtime', Counters[recv]) + 1]
                            /\ Trace' = (         Trace \union {
